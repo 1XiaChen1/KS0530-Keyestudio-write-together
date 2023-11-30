@@ -1,12 +1,16 @@
 /*
-  keyestudio sun_follower
-  lesson 11
-  sun_follower
-  http://www.keyestudio.com
+  小型太陽能發電系統
 */
 #include <Wire.h>
 #include <LiquidCrystal_I2C.h>
 LiquidCrystal_I2C lcd(0x27, 16, 2);
+
+//使用 DHT 程式庫
+#include "DHT.h"
+//DHT11 輸出腳
+#define DHTPIN 7
+#define DHTTYPE DHT11
+DHT dht(DHTPIN, DHTTYPE);
 
 #include <BH1750.h>
 BH1750 lightMeter;
@@ -31,14 +35,17 @@ unsigned int light; //save the variable of light intensity
 byte error = 15;//Define the error range to prevent vibration
 byte m_speed = 10;//set delay time to adjust the speed of servo;the longer the time, the smaller the speed
 byte resolution = 1;   //set the rotation accuracy of the servo, the minimum rotation angle 
-int temperature;  //save the variable of temperature
-int humidity; //save the variable of humidity
+int h;   //濕度
+int t;   //攝氏溫度
+int f;   //華氏溫度
 
 void setup() {
   Serial.begin(9600); //define the serial baud rate
   // Initialize the I2C bus (BH1750 library doesn't do this automatically)
   Wire.begin();
   lightMeter.begin();
+  Serial.println("DHT11 test!");
+  dht.begin(); //啟動DHT
 
   lr_servo.attach(lr_servopin);  // set the control pin of servo
   ud_servo.attach(ud_servopin);  // set the control pin of servo
@@ -54,32 +61,17 @@ void setup() {
   lcd.backlight();     //set LCD backlight
 
   lr_servo.write(lr_angle);//return to initial angle
-  delay(1000);
+  delay(2000);
   ud_servo.write(ud_angle);
-  delay(1000);
+  delay(2000);
 
 }
 
 void loop() {
   ServoAction();  //servo performs the action
   read_light();   //read the light intensity of bh1750
-    //read the value of temperature and humidity
+  read_dht11();   //read the value of temperature and humidity
   LcdShowValue(); //Lcd shows the values of light intensity, temperature and humidity
-
-  //erial monitor displays the resistance of the photoresistor and the angle of servo
-  /*Serial.print(" L ");
-  Serial.print(L);
-  Serial.print(" R ");
-  Serial.print(R);
-  Serial.print("  U ");
-  Serial.print(U);
-  Serial.print(" D ");
-  Serial.print(D);
-  Serial.print("  ud_angle ");
-  Serial.print(ud_angle);
-  Serial.print("  lr_angle ");
-  Serial.println(lr_angle);*/
-  //  delay(1000);//During the test, the serial port data is received too fast, and it can be adjusted by adding delay time */
 }
 
 /**********the function of the servo************/
@@ -141,13 +133,32 @@ void ServoAction(){
   }
 }
 
+void read_dht11() {
+    h = dht.readHumidity(); //讀取濕度
+    t = dht.readTemperature(); //讀取攝氏溫度
+    f = dht.readTemperature(true); //讀取華氏溫度
+ 
+    if (isnan(h) || isnan(t) || isnan(f)) {
+        Serial.println("無法從DHT模組讀取資料!");
+        return;
+    }
+    Serial.print("濕度:"); //在序列監控視窗顯示溫度與濕度
+    Serial.print(h);
+    Serial.print("%\t");
+    Serial.print("溫度:");
+    Serial.print(t);
+    Serial.print("℃ ");
+    Serial.print(f);
+    Serial.println("℉");
+}
+
 void LcdShowValue() {
   char str1[5];
   char str2[2];
   char str3[2];
   dtostrf(light, -5, 0, str1); //Format the light value data as a string, left-aligned
-  dtostrf(temperature, -2, 0, str2);
-  dtostrf(humidity, -2, 0, str3);
+  dtostrf(t, -2, 0, str2);
+  dtostrf(h, -2, 0, str3);
   //LCD1602 display
   //display the value of the light intensity
   lcd.setCursor(0, 0);
@@ -159,11 +170,11 @@ void LcdShowValue() {
   
   //display the value of temperature and humidity
   lcd.setCursor(0, 1);
-  lcd.print(temperature);
+  lcd.print(t);
   lcd.setCursor(2, 1);
   lcd.print("C");
   lcd.setCursor(5, 1);
-  lcd.print(humidity);
+  lcd.print(h);
   lcd.setCursor(7, 1);
   lcd.print("%");
 
@@ -172,37 +183,15 @@ void LcdShowValue() {
   lcd.print("res:");
   lcd.setCursor(15, 1);
   lcd.print(resolution);
-  /*if (light < 10) {
-    lcd.setCursor(7, 0);
-    lcd.print("        ");
-    lcd.setCursor(6, 0);
-    lcd.print(light);
-    } else if (light < 100) {
-    lcd.setCursor(8, 0);
-    lcd.print("       ");
-    lcd.setCursor(6, 0);
-    lcd.print(light);
-    } else if (light < 1000) {
-    lcd.setCursor(9, 0);
-    lcd.print("      ");
-    lcd.setCursor(6, 0);
-    lcd.print(light);
-    } else if (light < 10000) {
-    lcd.setCursor(9, 0);
-    lcd.print("      ");
-    lcd.setCursor(6, 0);
-    lcd.print(light);
-    } else if (light < 100000) {
-    lcd.setCursor(10, 0);
-    lcd.print("     ");
-    lcd.setCursor(6, 0);
-    lcd.print(light);
-    }*/
 }
 
 void read_light(){
   light = lightMeter.readLightLevel();  //read the light intensity detected by BH1750
 }
+
+
+
+
 
 /*********function disrupts service**************/
 void adjust_resolution() {
